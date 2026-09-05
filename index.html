@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RISC-V Simulator & Debugger</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header>
+    <div class="logo-area">
+      <h1>RISC-V SIM</h1>
+      <span class="badge">RV32IM + Zicsr</span>
+      <span id="statusPill" class="status-pill status-ready">Ready</span>
+    </div>
+
+    <div class="toolbar">
+      <div class="control-group">
+        <label for="presetSelect">Program:</label>
+        <select id="presetSelect">
+          <option value="test.s">examples/test.s (Math & Ecall)</option>
+          <option value="2tests.s">examples/2tests.s (Load/Store & Memory)</option>
+          <option value="test.hex">examples/test.hex (Raw Hex)</option>
+          <option value="custom">Custom / Upload...</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="baseAddrInput">Base:</label>
+        <input type="text" id="baseAddrInput" value="0x80000000" style="width: 100px;">
+      </div>
+
+      <button id="stepBtn" class="btn btn-primary" title="Execute single step (F10)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h2v16H4V4zm4 8l10-7v14l-10-7z"/></svg>
+        Step
+      </button>
+
+      <button id="runBtn" class="btn btn-success" title="Run / Pause simulation (Space)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <span id="runBtnText">Run</span>
+      </button>
+
+      <button id="resetBtn" class="btn" title="Reset CPU and Memory">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+        Reset
+      </button>
+
+      <div class="control-group" style="margin-left: 8px;">
+        <label for="speedSlider">Speed:</label>
+        <input type="range" id="speedSlider" min="1" max="100" value="25" style="width: 90px;">
+        <span id="speedLabel" style="font-family: monospace; min-width: 45px;">25 Hz</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Left: Code Execution Viewer -->
+    <section class="panel">
+      <div class="panel-header">
+        <span>PROGRAM CODE</span>
+        <div class="panel-header-actions">
+          <label style="font-weight: normal; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+            <input type="checkbox" id="followPcCheckbox" checked> Follow PC
+          </label>
+          <button id="editCodeBtn" class="btn" style="padding: 2px 8px; font-size: 0.75rem;">Edit / Load</button>
+        </div>
+      </div>
+      <div class="panel-body" id="codePanelBody">
+        <div class="code-container" id="codeContainer"></div>
+      </div>
+    </section>
+
+    <!-- Center: Register File -->
+    <section class="panel">
+      <div class="panel-header">
+        <span>REGISTERS (x0 - x31)</span>
+        <div class="panel-header-actions">
+          <button id="regFormatBtn" class="btn" style="padding: 2px 8px; font-size: 0.75rem;">Hex / Dec</button>
+        </div>
+      </div>
+      <div class="regs-summary">
+        <div class="summary-card">
+          <div class="label">Program Counter</div>
+          <div class="val" id="pcVal">0x80000000</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Steps / Instret</div>
+          <div class="val" id="stepsVal">0</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Cycles (mcycle)</div>
+          <div class="val" id="cyclesVal">0</div>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="regs-grid" id="regsGrid"></div>
+      </div>
+    </section>
+
+    <!-- Right: Memory Inspector & Access Tracking -->
+    <section class="panel">
+      <div class="panel-header">
+        <span>MEMORY INSPECTOR</span>
+        <div class="panel-header-actions">
+          <input type="text" id="memAddrInput" value="0x80000000" style="width: 95px; padding: 2px 6px; font-size: 0.75rem; font-family: monospace;">
+          <button id="memGoBtn" class="btn" style="padding: 2px 6px; font-size: 0.75rem;">Go</button>
+          <button id="memPcBtn" class="btn" style="padding: 2px 6px; font-size: 0.75rem;" title="Jump to PC">@PC</button>
+          <button id="memSpBtn" class="btn" style="padding: 2px 6px; font-size: 0.75rem;" title="Jump to SP">@SP</button>
+        </div>
+      </div>
+      <div class="mem-banner" id="memBanner">
+        <span style="color: var(--text-muted);">Last Access:</span>
+        <span id="memAccessDesc" style="color: #d4d4d8;">None</span>
+      </div>
+      <div class="panel-body" id="memPanelBody">
+        <table class="hex-table" id="hexTable">
+          <thead>
+            <tr>
+              <th style="width: 85px; text-align: left; padding-left: 8px;">Address</th>
+              <th>00</th><th>01</th><th>02</th><th>03</th>
+              <th>04</th><th>05</th><th>06</th><th>07</th>
+              <th>08</th><th>09</th><th>0A</th><th>0B</th>
+              <th>0C</th><th>0D</th><th>0E</th><th>0F</th>
+              <th style="padding-left: 8px; text-align: left;">ASCII</th>
+            </tr>
+          </thead>
+          <tbody id="hexTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Bottom: Syscall / Output Console -->
+    <section class="panel console-panel">
+      <div class="panel-header">
+        <span>SYSCALL OUTPUT & CONSOLE (ecall)</span>
+        <div class="panel-header-actions">
+          <button id="clearConsoleBtn" class="btn" style="padding: 2px 8px; font-size: 0.75rem;">Clear</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="console-output" id="consoleOutput">Simulator ready. Click 'Step' or 'Run' to begin execution.</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Custom Code Modal -->
+  <div id="codeModal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100;">
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; width: 650px; max-width: 90vw; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-size: 1rem; color: var(--accent-cyan);">Load / Edit Source Code</h3>
+        <button id="closeModalBtn" class="btn" style="padding: 2px 6px;">✕</button>
+      </div>
+
+      <div style="display: flex; gap: 10px; align-items: center; font-size: 0.85rem;">
+        <label>Format:</label>
+        <select id="modalFormatSelect">
+          <option value="s">Assembly (.s / .asm)</option>
+          <option value="hex">Hex (@addr + hex)</option>
+        </select>
+
+        <label style="margin-left: 10px;">Or upload file:</label>
+        <input type="file" id="fileInput" accept=".s,.asm,.hex,.txt" style="font-size: 0.8rem;">
+      </div>
+
+      <textarea id="modalTextarea" rows="16" style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; font-family: monospace; font-size: 0.85rem; padding: 8px; border-radius: 6px; resize: vertical;"></textarea>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button id="cancelModalBtn" class="btn">Cancel</button>
+        <button id="applyModalBtn" class="btn btn-primary">Load into Simulator</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
