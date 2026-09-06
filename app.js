@@ -350,7 +350,6 @@ function loadProgram(code, format, baseStr) {
 
     // Reset UI state
     prevRegs = new Array(32).fill(0);
-    prevRegs[2] = (base + memSize) >>> 0; // sp
     activeLine = 1;
     lastMemAccess = null;
     memAccessDesc.textContent = 'None';
@@ -535,8 +534,6 @@ function reset() {
     lastMemAccess = null;
     memAccessDesc.textContent = 'None';
     prevRegs = new Array(32).fill(0);
-    const base = parseAddr(baseAddrInput.value);
-    prevRegs[2] = (base + 128 * 1024 * 1024) >>> 0; // sp
 
     pcVal.textContent = toHex(sim.get_pc(), 8);
     stepsVal.textContent = '0';
