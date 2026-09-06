@@ -543,7 +543,8 @@ function reset() {
     renderRegisters(prevRegs, []);
     renderMemory(currentMemAddr);
     setStatus('Ready', 'ready');
-    appendConsole('\n[System] Simulator reset.\n');
+    consoleOutput.textContent = '';
+    appendConsole('[System] Simulator reset.\n');
   } catch (err) {
     setStatus('Error', 'exception');
     appendConsole(`[Error] Reset failed: ${err}\n`);
